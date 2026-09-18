@@ -36,23 +36,48 @@ failure.
 Local dev runs two processes (Vite's dev server + the API) so Vite can hot-reload.
 For deployment there's just **one service**: `server/src/index.ts` serves the
 built frontend itself once `web/dist` exists, so the API and the app share
-one origin and one port -- no separate frontend host, no CORS wiring.
+one origin and one port -- no separate frontend host, no CORS wiring. The
+server is compiled with `tsc` (`server/package.json`'s `build`/`start`
+scripts) rather than run through `tsx`, specifically so it has no
+devDependency it needs at runtime -- that matters for the buildpack-style
+hosts below, which strip devDependencies before running the app.
 
-**Render (free tier, easiest)**:
-1. Push this repo to your own GitHub, then in Render: **New -> Blueprint**,
-   point it at the repo. `render.yaml` at the root already declares the
-   service (`npm install && npm run build` / `npm run start`).
-2. In the service's Environment tab, add `LTA_ACCOUNT_KEY` and/or
-   `GEMINI_API_KEY` if you have them -- both are optional, the app runs on
-   demo fixtures without them. `PORT` is set by Render automatically; the
-   app reads it directly.
-3. Deploy. Render gives you a real `https://` URL -- open it on your phone
-   from anywhere, not just your home Wi-Fi.
+**Google Cloud Run (what this was actually submitted on)**:
+1. In the Google Cloud Console, make sure the project with your hackathon
+   credits is selected, then open **Cloud Shell** (top-right icon) -- it
+   comes with `gcloud` and `git` preinstalled, no local setup needed.
+2. `git clone` this repo and `cd` into it.
+3. ```bash
+   gcloud run deploy commute-companion-sg \
+     --source . \
+     --region asia-southeast1 \
+     --allow-unauthenticated
+   ```
+   The first run will prompt to enable the Cloud Build, Artifact Registry
+   and Cloud Run APIs -- accept those. Cloud Build finds the `Dockerfile`
+   at the repo root and uses it directly (this repo does *not* rely on
+   Cloud Buildpacks' auto-detection, on purpose -- see the Dockerfile's own
+   comments for why a multi-stage build was written by hand instead: it's
+   an npm-workspaces monorepo, and this keeps the build fully predictable).
+4. Optional live-data keys: either add `--set-env-vars
+   LTA_ACCOUNT_KEY=...,GEMINI_API_KEY=...` to the command above, or set
+   them afterwards under the service's **Edit & Deploy New Revision ->
+   Variables & Secrets** in the console. Neither is required -- the app
+   runs fully on demo fixtures without them.
+5. The command prints a `https://commute-companion-sg-<hash>-<region>.a.run.app`
+   URL once it's live -- open that on your phone from anywhere.
 
-**Any other Node host** (Railway, Fly.io, a VPS, etc.): the same two
-commands work anywhere -- `npm install && npm run build` to build, then
-`npm run start` to run. Set `PORT` (most platforms set it for you) and
-optionally `LTA_ACCOUNT_KEY`/`GEMINI_API_KEY`.
+**Render (free tier, works too, just not GCP)**:
+1. In Render: **New -> Blueprint**, point it at this repo on GitHub.
+   `render.yaml` at the root already declares the service.
+2. Optionally add `LTA_ACCOUNT_KEY`/`GEMINI_API_KEY` in the Environment tab.
+3. Deploy -- Render gives you a real `https://` URL.
+
+**Any other Node or container host** (Railway, Fly.io, a VPS, etc.): the
+Dockerfile builds and runs standalone (`docker build . && docker run -p
+8080:8080 ...`), or without Docker: `npm install && npm run build` then
+`npm run start`. Set `PORT` (most platforms set it for you) and optionally
+`LTA_ACCOUNT_KEY`/`GEMINI_API_KEY`.
 
 ## What's implemented against the brief
 
