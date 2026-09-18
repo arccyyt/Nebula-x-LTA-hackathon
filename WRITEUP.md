@@ -40,6 +40,38 @@ graph (`server/src/lib/graph.ts`) with per-line sequences and transfer
 penalties, not a call to OSRM/GraphHopper/OneMap's transit router -- see
 Assumptions below for why, and what swapping it out would look like.
 
+## Deployment
+
+Submitted running on **Google Cloud Run**, per the hackathon's requirement
+to deploy on GCP using the provided credits: **https://commute-companion-sg-611005443072.asia-southeast1.run.app**.
+Cloud Run was chosen over App Engine or a raw Compute Engine VM because it
+maps directly onto what this app actually needs -- a single stateless HTTP
+service with bursty, low, demo-day traffic -- and scales to zero between
+requests, which is the cheapest possible way to spend hackathon credit on a
+service that mostly sits idle. The container is built from a hand-written
+multi-stage `Dockerfile` at the repo root rather than relying on Google
+Cloud Buildpacks' auto-detection: this is an npm-workspaces monorepo, and
+buildpack auto-detection on that shape is less predictable than just writing
+the four `COPY`/`RUN` lines out. One consequence worth flagging: Buildpacks
+(and most PaaS hosts) strip devDependencies before running the app, which is
+why `server/` compiles to plain JS via `tsc` and runs with `node`, not
+`tsx` -- `tsx` was a devDependency the old run command needed at runtime,
+which would have broken silently on first deploy.
+
+The practical effect of deploying on GCP rather than staying in the
+sandboxed environment this was built in: **outbound network access is no
+longer the constraint it was during development.** Every adapter in
+`server/src/adapters/` already tries the real LTA DataMall / data.gov.sg /
+OneMap / Gemini endpoint first and only falls back to a fixture on failure
+-- during development that fallback fired on every single call, because
+this session's own network policy blocked those domains outright (verified
+against the proxy's own status endpoint, not assumed). On Cloud Run, a
+correctly-configured `LTA_ACCOUNT_KEY` should actually go live. That was
+not verified end-to-end before submission (no time left in the session to
+confirm it against a real key from GCP), so treat "live LTA data on the
+deployed instance" as untested rather than working until someone checks
+the `data:` badges in the running app and confirms they say `live`.
+
 ## Assumptions
 
 - **Station/line network is illustrative, not the full network.** The brief
@@ -104,13 +136,16 @@ is this specific platform actually crowded right now.
 
 ## Limitations
 
-See `README.md#known-limitations` for the full list (service-worker-free
-offline handling, no true background walking guidance, illustrative
-station graph, partial i18n). None of these were hidden -- each is called
-out in the UI itself (data-source badges, the `Rule-based fallback` label,
-the walking-mode disclaimer about needing the tab open) rather than only in
-this document, per the brief's own instruction that a claim a judge can't
-verify against the running app shouldn't score.
+See `README.md#known-limitations` for the full list (a service-worker
+caveat -- the app shell only caches for offline use after being opened
+online at least twice, an inherent property of how service workers
+register, not a bug; no true background walking guidance; the illustrative
+station graph; partial i18n; unverified live LTA data on the deployed
+instance, per Deployment above). None of these were hidden -- each is
+called out in the UI itself (data-source badges, the `Rule-based fallback`
+label, the walking-mode disclaimer about needing the tab open) rather than
+only in this document, per the brief's own instruction that a claim a
+judge can't verify against the running app shouldn't score.
 
 ## Privacy
 
