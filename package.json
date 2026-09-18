@@ -1,0 +1,11 @@
+{
+  "name": "smart-commuter-companion",
+  "private": true,
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "build:web": "npm run build -w web",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
+  }
+}
