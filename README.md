@@ -62,8 +62,12 @@ one-tap comparison, not a forced replacement.
   as a text-based digital ticket and written to `localStorage`
   (`web/src/utils/offlineCache.ts`). The app listens for the browser's
   `offline` event; the instant signal drops, it shows the cached ticket
-  instead of trying (and failing) to replan live. Verified end-to-end with a
-  Playwright smoke test (see `Testing` below).
+  instead of trying (and failing) to replan live. A service worker
+  (`web/public/sw.js`) also caches the app shell itself, so a **cold
+  reload** with zero connectivity still loads the UI rather than freezing
+  on a blank tab -- not just the case where the app was already open when
+  signal dropped. Both paths verified end-to-end with Playwright (see
+  `Testing` below).
 - **Accessibility / elderly mode.** Wheelchair/stroller mode; if
   `FacilitiesMaintenance` reports the destination station's lift as faulty,
   the planner automatically reroutes to the nearest station with a working
@@ -165,15 +169,40 @@ endpoint) and falls back to a small local postal-code table.
   alternative-route comparison -> points -> accessibility panel -> going
   offline mid-session) was exercised with a headless-Chromium Playwright
   script at a 390x844 mobile viewport, with zero JS console errors.
+- The service worker's cold-reload path was verified separately against a
+  production build (`vite build` + `vite preview`): open online, reload
+  once online (primes the shell cache), go offline, reload again -- 200
+  response, full UI renders, zero page errors.
+- **Live LTA DataMall could not be exercised from the build environment**:
+  its egress network policy blocks `datamall2.mytransport.sg` outright (not
+  an app bug -- confirmed via the proxy's own status endpoint), so an
+  `LTA_ACCOUNT_KEY` set there still falls back to the demo fixtures. It will
+  work as soon as this runs somewhere with normal internet access (a laptop,
+  the actual judging machine) -- the adapter code path is identical either
+  way. One consequence of not being able to see a real response: the exact
+  live field names for `FacilitiesMaintenance` (`Line`/`StationCode`/
+  `StationName`/`LiftID`/`LiftDesc`) and `v3/BusArrival` (each service
+  nests up to three arrivals as `NextBus`/`NextBus2`/`NextBus3`, each
+  carrying `Load`/`Feature`/`Type`) were cross-checked against LTA's
+  published API guide and normalised in `server/src/data/facilities.ts` and
+  `server/src/data/bus.ts` -- but still couldn't be exercised against an
+  actual live response from this sandbox, so treat it as verified-on-paper,
+  not verified-in-practice, until it's run somewhere with real network
+  access. `server/src/adapters/lta.ts` still validates the response
+  envelope shape and falls back to the fixture on a mismatch either way.
 
 ## Known limitations (see write-up for the full list)
 
 - Map tiles need outbound network access to a tile CDN (CARTO by default);
   the route/station/crowd layers themselves render regardless.
-- "Underground, no signal" is handled for the realistic case -- the app
-  already open, then losing signal. Surviving a **cold reload** with zero
-  connectivity would need a service worker precaching the app shell; that's
-  clean follow-up work, not done here.
+- A service worker (`web/public/sw.js`) caches the app shell so a **cold
+  reload with zero connectivity** still loads the UI, not just "already
+  open, then losing signal". One caveat inherent to how service workers
+  work: the shell is only cached once the app has been opened online and
+  then reloaded/reopened at least once (a service worker never controls
+  the very page load that first registers it) -- after that, it survives
+  any number of offline cold starts. Verified with Playwright: open once,
+  reload once online, go offline, reload again -> 200, full UI renders.
 - True background (screen-off) turn-by-turn walking guidance isn't possible
   in a plain web app; Walking mode works with the tab open/foregrounded.
 - Language selection is stored and shown in onboarding; full UI translation

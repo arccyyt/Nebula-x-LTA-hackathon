@@ -192,8 +192,11 @@ export async function planJourney(input: PlanInput): Promise<PlanResult> {
   let lastMileFromLabel = `${destStation.name} station`;
 
   if (mobility !== "standard") {
-    const exit = destStation.exits[0];
-    const faulty = liftsRes.data.find((l) => l.station === destStation.name && l.exitId === exit?.id && l.status === "faulty");
+    // Station-level match, not a specific exit ID: the live feed's LiftID
+    // (e.g. "B1L01") and free-text LiftDesc don't reliably map onto our own
+    // synthetic exit IDs, and the feed only ever lists lifts that are
+    // currently faulty, so any match for this station is a real fault.
+    const faulty = liftsRes.data.find((l) => l.station === destStation.name && l.status === "faulty");
     if (faulty) {
       // Reroute to the previous stop on the same line, which has a working lift, and bridge with a WAB bus.
       const line = destStation.lines[0];
