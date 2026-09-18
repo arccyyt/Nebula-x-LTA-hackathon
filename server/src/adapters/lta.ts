@@ -5,8 +5,8 @@ import {
   type TrainServiceAlertsResponse,
 } from "../data/alerts.js";
 import { getRealtimeCrowd, getForecastSlots, type CrowdReading } from "../data/crowd.js";
-import { LIFT_STATUS, type LiftStatus } from "../data/facilities.js";
-import { BUS_STOPS, type BusStopArrivals } from "../data/bus.js";
+import { LIFT_STATUS, normalizeLiftRecords, type LiftStatus, type RawLiftMaintenanceRecord } from "../data/facilities.js";
+import { BUS_STOPS, normalizeBusArrival, type BusStopArrivals, type RawBusArrivalResponse } from "../data/bus.js";
 
 const BASE = "https://datamall2.mytransport.sg/ltaodataservice";
 
@@ -81,29 +81,30 @@ export async function getPcdForecast(crowdLineCode: string, stationCode: string,
   }
 }
 
-// NOTE: FacilitiesMaintenance's live field names (StationCode/LiftID/AffectedExit
-// or similar, per the DataMall PDF this repo doesn't ship) haven't been
-// cross-checked against a real response -- this sandbox's network policy
-// blocks datamall2.mytransport.sg outright (see README). The isOdataList
-// check below only confirms the envelope shape, not the field names inside
-// each record, so verify LiftStatus's fields against a real response before
-// relying on this in a live demo.
+// v2/FacilitiesMaintenance's real fields (Line, StationCode, StationName,
+// LiftID, LiftDesc) are confirmed against LTA's published API guide -- see
+// data/facilities.ts. It's an ad-hoc list of lifts currently under
+// maintenance, normalised here into the same LiftStatus shape the fixture
+// and planJourney.ts already use.
 export async function getFacilitiesMaintenance(): Promise<Sourced<LiftStatus[]>> {
   try {
-    const data = await callLta<{ value: LiftStatus[] }>("/FacilitiesMaintenance", isOdataList);
-    return { data: data.value, source: "live" };
+    const data = await callLta<{ value: RawLiftMaintenanceRecord[] }>("/FacilitiesMaintenance", isOdataList);
+    return { data: normalizeLiftRecords(data.value), source: "live" };
   } catch {
     return { data: LIFT_STATUS, source: "demo-fixture" };
   }
 }
 
+// v3/BusArrival nests up to 3 upcoming arrivals per service as
+// NextBus/NextBus2/NextBus3 (confirmed shape for Load/Feature/Type) --
+// normalised here into the flat per-arrival shape the rest of the app uses.
 export async function getBusArrival(busStopCode: string): Promise<Sourced<BusStopArrivals>> {
   try {
-    const data = await callLta<BusStopArrivals>(
+    const data = await callLta<RawBusArrivalResponse>(
       `/v3/BusArrival?BusStopCode=${busStopCode}`,
       (d): boolean => typeof d === "object" && d !== null && Array.isArray((d as { Services?: unknown }).Services),
     );
-    return { data, source: "live" };
+    return { data: normalizeBusArrival(data, new Date()), source: "live" };
   } catch {
     const fixture = BUS_STOPS[busStopCode] ?? Object.values(BUS_STOPS)[0];
     return { data: fixture, source: "demo-fixture" };

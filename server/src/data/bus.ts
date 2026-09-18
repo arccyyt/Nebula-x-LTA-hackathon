@@ -35,6 +35,42 @@ export const BUS_STOPS: Record<string, BusStopArrivals> = {
   },
 };
 
+// v3/BusArrival's real wire shape: one entry per service, with up to three
+// upcoming arrivals nested as NextBus/NextBus2/NextBus3 (not a flat list of
+// "bus" rows per service, which is what the internal BusArrival shape above
+// simplifies it to). EstimatedArrival is an absolute ISO8601 timestamp, not
+// a minutes-from-now count.
+export interface RawNextBus {
+  EstimatedArrival: string;
+  Load: "SEA" | "SDA" | "LSD";
+  Feature: "WAB" | "";
+  Type: "SD" | "DD" | "BD";
+}
+
+export interface RawBusService {
+  ServiceNo: string;
+  NextBus?: RawNextBus;
+  NextBus2?: RawNextBus;
+  NextBus3?: RawNextBus;
+}
+
+export interface RawBusArrivalResponse {
+  BusStopCode: string;
+  Services: RawBusService[];
+}
+
+export function normalizeBusArrival(raw: RawBusArrivalResponse, now: Date): BusStopArrivals {
+  const services: BusArrival[] = [];
+  for (const svc of raw.Services) {
+    for (const nb of [svc.NextBus, svc.NextBus2, svc.NextBus3]) {
+      if (!nb || !nb.EstimatedArrival) continue;
+      const minutesAway = Math.round((new Date(nb.EstimatedArrival).getTime() - now.getTime()) / 60000);
+      services.push({ ServiceNo: svc.ServiceNo, Load: nb.Load, Feature: nb.Feature, Type: nb.Type, EstimatedArrivalMin: Math.max(0, minutesAway) });
+    }
+  }
+  return { BusStopCode: raw.BusStopCode, Description: "", Services: services };
+}
+
 export interface BunchingAlert {
   service: string;
   skipBus: { arrivalMin: number; load: string };
