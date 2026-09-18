@@ -31,6 +31,29 @@ and fill in the keys you have (see below). Nothing else changes -- the same
 adapters call the real endpoint first and only fall back to the fixture on
 failure.
 
+## Deploying it (a real URL for your phone)
+
+Local dev runs two processes (Vite's dev server + the API) so Vite can hot-reload.
+For deployment there's just **one service**: `server/src/index.ts` serves the
+built frontend itself once `web/dist` exists, so the API and the app share
+one origin and one port -- no separate frontend host, no CORS wiring.
+
+**Render (free tier, easiest)**:
+1. Push this repo to your own GitHub, then in Render: **New -> Blueprint**,
+   point it at the repo. `render.yaml` at the root already declares the
+   service (`npm install && npm run build` / `npm run start`).
+2. In the service's Environment tab, add `LTA_ACCOUNT_KEY` and/or
+   `GEMINI_API_KEY` if you have them -- both are optional, the app runs on
+   demo fixtures without them. `PORT` is set by Render automatically; the
+   app reads it directly.
+3. Deploy. Render gives you a real `https://` URL -- open it on your phone
+   from anywhere, not just your home Wi-Fi.
+
+**Any other Node host** (Railway, Fly.io, a VPS, etc.): the same two
+commands work anywhere -- `npm install && npm run build` to build, then
+`npm run start` to run. Set `PORT` (most platforms set it for you) and
+optionally `LTA_ACCOUNT_KEY`/`GEMINI_API_KEY`.
+
 ## What's implemented against the brief
 
 **3.2.1 Route planning** -- `POST /api/route/plan` (see `server/src/lib/planJourney.ts`)
