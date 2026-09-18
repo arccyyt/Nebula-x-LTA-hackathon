@@ -165,6 +165,21 @@ endpoint) and falls back to a small local postal-code table.
   alternative-route comparison -> points -> accessibility panel -> going
   offline mid-session) was exercised with a headless-Chromium Playwright
   script at a 390x844 mobile viewport, with zero JS console errors.
+- **Live LTA DataMall could not be exercised from the build environment**:
+  its egress network policy blocks `datamall2.mytransport.sg` outright (not
+  an app bug -- confirmed via the proxy's own status endpoint), so an
+  `LTA_ACCOUNT_KEY` set there still falls back to the demo fixtures. It will
+  work as soon as this runs somewhere with normal internet access (a laptop,
+  the actual judging machine) -- the adapter code path is identical either
+  way. One consequence of not being able to see a real response: the exact
+  live field names for `FacilitiesMaintenance` and `v3/BusArrival` haven't
+  been cross-checked against the DataMall PDF spec (not included in this
+  repo). `server/src/adapters/lta.ts` validates the response *envelope*
+  shape and falls back to the fixture on a mismatch rather than passing
+  through wrong data silently, but the field names inside each record
+  (`server/src/data/facilities.ts`'s `LiftStatus`) are a best guess --
+  verify against a real response before depending on the lift-outage
+  reroute in a live judged demo.
 
 ## Known limitations (see write-up for the full list)
 
